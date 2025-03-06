@@ -1,4 +1,6 @@
-v1.70 - UNRELEASED
+v2.0 - 2025/03/06
+
+ - Update to the latest lwIP 2.1.0
 
  - Have the vpnns watcher process re-create the bind mount if the underlying
    resolv.conf is deleted (e.g. by NetworkManager)
@@ -6,6 +8,8 @@ v1.70 - UNRELEASED
  - Eliminate the possible 1-second delay when starting a new vpnns instance
 
  - Minor manpage update
+
+ - Add -H flag for loading an /etc/hosts style file into local dns
 
 v1.60 - 2017/01/08
 
