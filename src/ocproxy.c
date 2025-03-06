@@ -893,17 +893,57 @@ static struct ocp_sock *dyn_fwd(const char *arg)
 	return s;
 }
 
+static void add_hosts_from_file(const char *opt) {
+	FILE *file = fopen(opt, "r");
+	if (!file) {
+		die("Error opening file: '%s'\n", opt);
+	}
+
+	char *line = NULL;
+	size_t len = 0;
+	ssize_t read;
+
+	while ((read = getline(&line, &len, file)) != -1) {
+		/* stop line on comment char */
+		char *hash = strchr(line, '#');
+		if (hash) *hash = '\0';
+
+		char *ip_str = strtok(line, " \t\n");
+		if (!ip_str) {
+			continue; // Skip empty lines
+		}
+
+		struct in_addr ipv4_addr;
+		if (inet_pton(AF_INET, ip_str, &ipv4_addr) != 1) {
+			warn("Skipping invalid IP address: %s\n", ip_str);
+			continue;
+		}
+		ip_addr_t ip;
+		ip.addr = ipv4_addr.s_addr;
+
+		char *hostname;
+		while ((hostname = strtok(NULL, " \t\n")) != NULL) {
+			dns_local_addhost(hostname, &ip);
+			warn("Added: '%s' -> '%s'\n", hostname, ip_str);
+		}
+	}
+
+	free(line);
+	fclose(file);
+}
+
 static struct option longopts[] = {
-	{ "ip",			1,	NULL,	'I' },
-	{ "mtu",		1,	NULL,	'M' },
-	{ "dns",		1,	NULL,	'd' },
-	{ "domain",		1,	NULL,	'o' },
-	{ "localfw",		1,	NULL,	'L' },
-	{ "dynfw",		1,	NULL,	'D' },
-	{ "keepalive",		1,	NULL,	'k' },
-	{ "allow-remote",	0,	NULL,	'g' },
-	{ "verbose",		0,	NULL,	'v' },
-	{ "tcpdump",		0,	NULL,	'T' },
+	{ "ip",           1, NULL, 'I' },
+	{ "mtu",          1, NULL, 'M' },
+	{ "dns",          1, NULL, 'd' },
+	{ "domain",       1, NULL, 'o' },
+	{ "localfw",      1, NULL, 'L' },
+	{ "dynfw",        1, NULL, 'D' },
+	{ "keepalive",    1, NULL, 'k' },
+	{ "hosts-file",   1, NULL, 'H' },
+	{ "allow-remote", 0, NULL, 'g' },
+	{ "verbose",      0, NULL, 'v' },
+	{ "tcpdump",      0, NULL, 'T' },
 	{ NULL }
 };
 
@@ -911,7 +951,7 @@ int main(int argc, char **argv)
 {
 	int opt, i, vpnfd;
 	char *str;
-	char *ip_str, *mtu_str, *dns_str;
+	char *ip_str, *mtu_str, *dns_str, *hosts_file_str;
 	ip_addr_t ip, netmask, gw, dns;
 	struct ocp_sock *s;
 	struct netif netif;
@@ -948,8 +988,7 @@ int main(int argc, char **argv)
 	}
 
 	/* override with command line options */
-	while ((opt = getopt_long(argc, argv,
-				  "I:M:d:o:D:k:gL:vT", longopts, NULL)) != -1) {
+	while ((opt = getopt_long(argc, argv, "I:M:d:o:D:k:gL:vTH:", longopts, NULL)) != -1) {
 		switch (opt) {
 		case 'I':
 			ip_str = optarg;
@@ -959,6 +998,9 @@ int main(int argc, char **argv)
 			break;
 		case 'd':
 			dns_str = optarg;
+			break;
+		case 'H':
+			hosts_file_str = optarg;
 			break;
 		case 'o':
 			dns_domain = optarg;
@@ -1014,6 +1056,10 @@ int main(int argc, char **argv)
 			die("Invalid DNS IP: '%s'\n", dns_str);
 		/* this replaces the default opendns server */
 		dns_setserver(0, &dns);
+	}
+
+	if (hosts_file_str) {
+		add_hosts_from_file(hosts_file_str);
 	}
 
 	ip_addr_set_zero(&netmask);
